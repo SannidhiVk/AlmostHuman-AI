@@ -13,10 +13,6 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 
-## 🎥 Demo Video
-
-[![TalkMateAI Demo](https://img.youtube.com/vi/dE_8TXmp2Sk/maxresdefault.jpg)](https://www.youtube.com/watch?v=dE_8TXmp2Sk)
-
 ## ✨ Features
 
 ### 🎯 **Core Capabilities**
