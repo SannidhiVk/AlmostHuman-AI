@@ -7,7 +7,7 @@ import traceback
 from fastapi import WebSocket
 
 from models.whisper_processor import WhisperProcessor
-from models.smolvlm_processor import SmolVLMProcessor
+from models.moondream_processor import MoondreamProcessor
 from models.tts_processor import KokoroTTSProcessor
 from services.streaming_service import collect_remaining_text
 from utils.compatibility import anext
@@ -22,7 +22,7 @@ async def process_audio_segment(
     image_data=None,
     manager=None,
     whisper_processor=None,
-    smolvlm_processor=None,
+    moondream_processor=None,
     tts_processor=None,
 ):
     """Process a complete audio segment through the pipeline with optional image"""
@@ -69,20 +69,20 @@ async def process_audio_segment(
             logger.info(
                 f"Noise detected in transcription: '{transcribed_text}'. Skipping further processing."
             )
-            return
+            return  # finally block will reset state
 
         # Step 2: Set image if provided, then process text
         if image_data:
-            await smolvlm_processor.set_image(image_data)
+            await moondream_processor.set_image(image_data)
             logger.info("🖼️ Image set for multimodal processing")
 
-        # Process transcribed text with image using SmolVLM2
-        logger.info("Starting SmolVLM2 generation")
+        # Process transcribed text with image using Moondream
+        logger.info("Starting Moondream generation")
         streamer, initial_text, initial_collection_stopped_early = (
-            await smolvlm_processor.process_text_with_image(transcribed_text)
+            await moondream_processor.process_text_with_image(transcribed_text)
         )
         logger.info(
-            f"SmolVLM2 initial text: '{initial_text[:50]}...' ({len(initial_text)} chars)"
+            f"Moondream initial text: '{initial_text[:50]}...' ({len(initial_text)} chars)"
         )
 
         # Check if VLM response indicates noise
@@ -90,7 +90,7 @@ async def process_audio_segment(
             logger.info(
                 f"Noise detected in VLM processing: '{initial_text}'. Skipping TTS."
             )
-            return
+            return  # finally block will reset state
 
         # Step 3: Generate TTS for initial text WITH NATIVE TIMING
         if initial_text:
@@ -217,7 +217,7 @@ async def process_audio_segment(
                         # Update history with complete response
                         if collected_chunks:
                             complete_remaining_text = "".join(collected_chunks)
-                            smolvlm_processor.update_history_with_complete_response(
+                            moondream_processor.update_history_with_complete_response(
                                 transcribed_text,
                                 initial_text,
                                 complete_remaining_text,
@@ -228,19 +228,19 @@ async def process_audio_segment(
                         # Update history with partial response
                         if collected_chunks:
                             partial_remaining_text = "".join(collected_chunks)
-                            smolvlm_processor.update_history_with_complete_response(
+                            moondream_processor.update_history_with_complete_response(
                                 transcribed_text,
                                 initial_text,
                                 partial_remaining_text,
                             )
                         else:
-                            smolvlm_processor.update_history_with_complete_response(
+                            moondream_processor.update_history_with_complete_response(
                                 transcribed_text, initial_text
                             )
                         return
                 else:
                     # No remaining text, just update history with initial response
-                    smolvlm_processor.update_history_with_complete_response(
+                    moondream_processor.update_history_with_complete_response(
                         transcribed_text, initial_text
                     )
 
@@ -256,3 +256,10 @@ async def process_audio_segment(
         logger.error(f"Error processing audio segment: {e}")
         # Add more detailed error info
         logger.error(f"Full traceback: {traceback.format_exc()}")
+    finally:
+        # Reset to IDLE when we error/cancel - don't overwrite WAITING_FOR_PLAYBACK (normal completion)
+        if client_id in manager.client_state:
+            state = manager.client_state[client_id]
+            if state in ("THINKING", "SPEAKING"):
+                manager.client_state[client_id] = "IDLE"
+                logger.info(f"Reset client {client_id} state from {state} to IDLE")

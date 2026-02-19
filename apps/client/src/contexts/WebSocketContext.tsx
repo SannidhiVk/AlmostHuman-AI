@@ -33,6 +33,7 @@ interface WebSocketContextType {
   isConnecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
+  sendPlaybackComplete: () => void;
   sendAudioSegment: (audioData: ArrayBuffer) => void;
   sendImage: (imageData: string) => void;
   sendAudioWithImage: (audioData: ArrayBuffer, imageData: string) => void;
@@ -185,6 +186,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     }
   }, []);
 
+  const sendPlaybackComplete = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const message = {
+        playback_complete: true
+      };
+      wsRef.current.send(JSON.stringify(message));
+      console.log('Sent playback_complete to server');
+    }
+  }, []);
+
   const sendAudioSegment = useCallback((audioData: ArrayBuffer) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       // Convert ArrayBuffer to base64
@@ -275,6 +286,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     isConnecting,
     connect,
     disconnect,
+    sendPlaybackComplete,
     sendAudioSegment,
     sendImage,
     sendAudioWithImage,

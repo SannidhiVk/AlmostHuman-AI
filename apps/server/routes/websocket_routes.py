@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from managers.connection_manager import manager
 from models.whisper_processor import WhisperProcessor
-from models.smolvlm_processor import SmolVLMProcessor
+from models.moondream_processor import MoondreamProcessor
 from models.tts_processor import KokoroTTSProcessor
 from services.audio_service import process_audio_segment
 
@@ -23,7 +23,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
     # Get instances of processors
     whisper_processor = WhisperProcessor.get_instance()
-    smolvlm_processor = SmolVLMProcessor.get_instance()
+    moondream_processor = MoondreamProcessor.get_instance()
     tts_processor = KokoroTTSProcessor.get_instance()
 
     try:
@@ -51,14 +51,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     try:
                         message = json.loads(data)
 
+                        # Handle interrupt: force cancel and reset state (user spoke again)
+                        if message.get("interrupt"):
+                            logger.info(
+                                f"Interrupt received for client {client_id}; forcing state to IDLE"
+                            )
+                            await manager.cancel_current_tasks(client_id)
+                            manager.client_state[client_id] = "IDLE"
+                            continue
+
                         # Handle complete audio segments from frontend
                         if "audio_segment" in message:
-                            # Cancel any current processing
-                            if manager.client_state.get(client_id) != "IDLE":
-                                logger.info(
-                                    f"Ignoring audio because state is {manager.client_state.get(client_id)}"
-                                )
-                                continue
+                            # Cancel any current processing (new audio = interrupt)
                             await manager.cancel_current_tasks(client_id)
 
                             # Decode audio data
@@ -85,11 +89,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                     image_data,
                                     manager,
                                     whisper_processor,
-                                    smolvlm_processor,
+                                    moondream_processor,
                                     tts_processor,
                                 )
                             )
                             manager.set_task(client_id, "processing", processing_task)
+
+                        # Handle notification that client finished playing audio
+                        elif message.get("playback_complete"):
+                            logger.info(
+                                f"Client {client_id} reported playback complete; resetting state to IDLE"
+                            )
+                            manager.client_state[client_id] = "IDLE"
 
                         # Handle standalone images (only if not currently processing)
                         elif "image" in message:
@@ -115,7 +126,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                         f"📸 Standalone image saved and verified: {verification}"
                                     )
 
-                                await smolvlm_processor.set_image(image_data)
+                                await moondream_processor.set_image(image_data)
                                 logger.info("Image updated")
 
                         # Handle realtime input (for backward compatibility)
@@ -134,7 +145,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                             None,
                                             manager,
                                             whisper_processor,
-                                            smolvlm_processor,
+                                            moondream_processor,
                                             tts_processor,
                                         )
                                     )
@@ -170,7 +181,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                                 f"📸 Realtime image saved and verified: {verification}"
                                             )
 
-                                        await smolvlm_processor.set_image(image_data)
+                                        await moondream_processor.set_image(image_data)
 
                     except json.JSONDecodeError as e:
                         logger.error(f"Error decoding JSON: {e}")

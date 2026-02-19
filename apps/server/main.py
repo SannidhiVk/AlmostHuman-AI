@@ -11,7 +11,7 @@ from managers.connection_manager import manager
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Whisper + SmolVLM2 Voice Assistant",
+    title="Whisper + Moondream Voice Assistant",
     description="Real-time voice assistant with speech recognition, image processing, and text-to-speech",
     version="1.0.0",
     lifespan=lifespan,
@@ -33,7 +33,7 @@ app.include_router(websocket_router)
 
 def main():
     """Main function to start the FastAPI server"""
-    logger.info("Starting FastAPI Whisper + SmolVLM2 Voice Assistant server...")
+    logger.info("Starting FastAPI Whisper + Moondream Voice Assistant server...")
 
     # Configure uvicorn
     config = uvicorn.Config(

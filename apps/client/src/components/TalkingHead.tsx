@@ -73,6 +73,7 @@ const TalkingHead: React.FC<TalkingHeadProps> = ({
     isConnecting,
     connect,
     disconnect,
+    sendPlaybackComplete,
     onAudioReceived,
     onInterrupt,
     onError,
@@ -120,6 +121,7 @@ const TalkingHead: React.FC<TalkingHeadProps> = ({
     if (audioQueueRef.current.length === 0) {
       isPlayingAudioRef.current = false;
       setIsSpeaking(false);
+      sendPlaybackComplete();
       return;
     }
 
@@ -178,7 +180,7 @@ const TalkingHead: React.FC<TalkingHeadProps> = ({
       // Continue to next audio on error
       setTimeout(() => playNextAudio(), 100);
     }
-  }, [initAudioContext]);
+  }, [initAudioContext, sendPlaybackComplete]);
 
   // Handle audio from WebSocket
   const handleAudioReceived = useCallback(

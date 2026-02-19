@@ -66,8 +66,11 @@ class ConnectionManager:
                 except asyncio.CancelledError:
                     pass
 
-            # Reset tasks
+            # Reset tasks and state so we never get stuck
             self.current_tasks[client_id] = {"processing": None, "tts": None}
+            if client_id in self.client_state:
+                self.client_state[client_id] = "IDLE"
+                logger.info(f"Reset client {client_id} state to IDLE after cancel")
 
     def set_task(self, client_id: str, task_type: str, task: asyncio.Task):
         """Set a task for a client"""

@@ -48,10 +48,10 @@ const VoiceBlob: React.FC<{
   transmissionMode: 'audio' | 'audio+image' | 'none';
 }> = ({ energy, isActive, threshold, transmissionMode }) => {
   const [animationTime, setAnimationTime] = useState(0);
-  const [isMounted, setIsMounted] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
+    setHasMounted(true);
     const interval = setInterval(() => {
       setAnimationTime(Date.now());
     }, 50);
@@ -116,11 +116,11 @@ const VoiceBlob: React.FC<{
     return path;
   };
 
-  const blobPath = isMounted
+  const blobPath = hasMounted
     ? createBlobPath(normalizedEnergy, animationTime)
     : createStaticBlobPath();
   const isAboveThreshold = energy > threshold;
-  const displaySize = isMounted ? size : baseSize;
+  const displaySize = hasMounted ? size : baseSize;
 
   // Dynamic gradient based on transmission mode
   const getGradientColors = () => {
@@ -147,6 +147,66 @@ const VoiceBlob: React.FC<{
 
   const colors = getGradientColors();
 
+  // During SSR / first client render, use a static, deterministic blob
+  if (!hasMounted) {
+    const staticPath = createStaticBlobPath();
+
+    return (
+      <div className="flex flex-col items-center space-y-4">
+        <div className="relative">
+          <svg
+            width={maxSize + 20}
+            height={maxSize + 20}
+            className="overflow-visible"
+          >
+            <defs>
+              <radialGradient id="blobGradient" cx="50%" cy="50%">
+                <stop offset="0%" stopColor={colors.start} stopOpacity="0.8" />
+                <stop
+                  offset="70%"
+                  stopColor={colors.middle}
+                  stopOpacity="0.6"
+                />
+                <stop offset="100%" stopColor={colors.end} stopOpacity="0.3" />
+              </radialGradient>
+
+              <filter id="glow">
+                <feGaussianBlur stdDeviation={1} result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <path
+              d={staticPath}
+              fill="url(#blobGradient)"
+              filter="url(#glow)"
+              className="transition-all duration-75 ease-out"
+              transform={`translate(${(maxSize + 20 - baseSize) / 2}, ${(maxSize + 20 - baseSize) / 2})`}
+            />
+
+            <circle
+              cx={(maxSize + 20) / 2}
+              cy={(maxSize + 20) / 2}
+              r={3}
+              fill="white"
+              opacity={0.9}
+            />
+          </svg>
+        </div>
+
+        <div className="text-center">
+          <div className="font-mono text-2xl font-bold text-blue-600">
+            {energy.toFixed(4)}
+          </div>
+          <p className="text-muted-foreground text-sm">Energy Level</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="relative">
@@ -164,7 +224,7 @@ const VoiceBlob: React.FC<{
 
             <filter id="glow">
               <feGaussianBlur
-                stdDeviation={isMounted ? normalizedEnergy * 3 + 1 : 1}
+                stdDeviation={hasMounted ? normalizedEnergy * 3 + 1 : 1}
                 result="coloredBlur"
               />
               <feMerge>
@@ -185,7 +245,7 @@ const VoiceBlob: React.FC<{
           <circle
             cx={(maxSize + 20) / 2}
             cy={(maxSize + 20) / 2}
-            r={3 + (isMounted ? normalizedEnergy * 2 : 0)}
+            r={3 + (hasMounted ? normalizedEnergy * 2 : 0)}
             fill="white"
             opacity={0.9}
           />
@@ -309,9 +369,9 @@ const VoiceActivityDetector: React.FC<VoiceActivityDetectorProps> = ({
   >([]);
 
   const [config, setConfig] = useState<VADConfig>({
-    energyThreshold: 0.02,
-    conversationBreakDuration: 2.5,
-    minSpeechDuration: 0.8,
+    energyThreshold: 0.01,
+    conversationBreakDuration: 1.2,
+    minSpeechDuration: 0.3,
     maxSpeechDuration: 15,
     sampleRate: 16000
   });
